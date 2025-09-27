@@ -59,4 +59,25 @@ program
     }
   });
 
+
+// ---------------- HISTORY ----------------
+program
+  .command("history")
+  .description("Show upload/download history")
+  .action(() => {
+    const historyPath = path.join(process.cwd(), ".drive-history.json");
+    if (!fs.existsSync(historyPath)) {
+      console.log(chalk.yellow("⚠ No history found."));
+      return;
+    }
+    const history = JSON.parse(fs.readFileSync(historyPath));
+    console.log(chalk.cyan("📜 Drive History:"));
+    history.forEach((h, i) => {
+      console.log(
+        chalk.green(`${i + 1}. [${h.timestamp}] ${h.user} ${h.action}ed ${h.file} -> ${h.driveId}`)
+      );
+    });
+  });
+
+
 program.parse(process.argv);

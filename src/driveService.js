@@ -23,11 +23,35 @@ async function getDriveFolderId(drive) {
   return folder.data.id;
 }
 
+const HISTORY_PATH = path.join(process.cwd(), ".drive-history.json");
+
+// ---------------- HISTORY LOGGER ----------------
+function logHistory(entry) {
+  const historyFile = path.join(process.cwd(), ".drive-history.json");
+  let history = [];
+
+  if (fs.existsSync(historyFile)) {
+    try {
+      const raw = fs.readFileSync(historyFile, "utf-8");
+      history = JSON.parse(raw);
+      if (!Array.isArray(history)) {
+        history = []; // ✅ reset if file got corrupted or is an object
+      }
+    } catch (err) {
+      history = []; // ✅ reset if JSON parse fails
+    }
+  }
+
+  history.push(entry);
+
+  fs.writeFileSync(historyFile, JSON.stringify(history, null, 2));
+}
+
+
 // ---------------- PUSH ----------------
 async function pushFiles(filePaths = []) {
   const auth = getAuthClient();
   const drive = google.drive({ version: "v3", auth });
-
   const folderId = await getDriveFolderId(drive);
 
   if (filePaths.length === 0) {
@@ -39,15 +63,37 @@ async function pushFiles(filePaths = []) {
   }
 
   for (let filePath of filePaths) {
-    const fileName = path.basename(filePath);
-    const res = await drive.files.create({
-      requestBody: { name: fileName, parents: [folderId] },
-      media: { body: fs.createReadStream(filePath) },
-      fields: "id",
-    });
-    console.log("✔ Uploaded:", fileName, "->", res.data.id);
+    const fileName = path.basename(filePath); // ✅ define here
+    try {
+      const res = await drive.files.create({
+        requestBody: {
+          name: fileName,
+          parents: [folderId],
+        },
+        media: {
+          body: fs.createReadStream(filePath),
+        },
+        fields: "id",
+      });
+
+      console.log("✔ Uploaded:", fileName, "->", res.data.id);
+
+      // ✅ log after upload success
+      logHistory({
+        user: process.env.USER || process.env.USERNAME || "unknown",
+        timestamp: new Date().toISOString(),
+        file: fileName,
+        driveId: res.data.id,
+        action: "upload",
+      });
+
+    } catch (err) {
+      console.error("❌ Upload failed for", fileName, ":", err.message);
+    }
   }
 }
+
+
 
 // ---------------- PULL ----------------
 async function pullFiles() {
